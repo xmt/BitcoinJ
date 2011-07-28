@@ -125,6 +125,40 @@ public class Transaction extends Message implements Serializable {
     public BigInteger getValueSentToMe(Wallet wallet) {
         return getValueSentToMe(wallet, true);
     }
+    
+    /**
+     * Calculates the transaction fee included with this transaction. Fees are extra input coins
+     * that are not spent in outputs.
+     */
+    public BigInteger getFee(final Wallet wallet)
+    {
+        BigInteger in = BigInteger.ZERO;
+        BigInteger out = BigInteger.ZERO;
+        
+        for (final TransactionInput input : inputs)
+        {
+            //XXX: no easy way to get value of input!
+            TransactionOutput connected = input.getConnectedOutput(wallet.unspent);
+            if (connected == null)
+                connected = input.getConnectedOutput(wallet.spent);
+            if (connected == null)
+                connected = input.getConnectedOutput(wallet.pending);
+            if (connected == null)
+            {
+                //XXX: what to do?
+                return BigInteger.ZERO;
+            }
+            
+            in = in.add(connected.getValue());
+        }
+        
+        for (final TransactionOutput output : outputs)
+        {
+            out = out.add(output.getValue());
+        }
+        
+        return in.subtract(out);
+    }
 
     /**
      * Returns a set of blocks which contain the transaction, or null if this transaction doesn't have that data

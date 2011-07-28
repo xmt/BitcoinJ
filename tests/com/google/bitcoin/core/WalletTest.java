@@ -188,12 +188,14 @@ public class WalletTest {
         // correctly isn't possible in SPV mode because value is a property of outputs not inputs. Without all
         // transactions you can't check they add up.
         wallet.receive(tx, null, BlockChain.NewBlockType.BEST_CHAIN);
-        // Now the other guy creates a transaction which spends that change.
+        // Now the other guy creates a transaction which spends that change, paying a trasaction fee of 0.01
         Transaction tx2 = new Transaction(params);
         tx2.addInput(output);
-        tx2.addOutput(new TransactionOutput(params, tx2, Utils.toNanoCoins(0, 5), myAddress));
+        tx2.addOutput(new TransactionOutput(params, tx2, Utils.toNanoCoins(0, 4), myAddress));
         // tx2 doesn't send any coins from us, even though the output is in the wallet.
         assertEquals(Utils.toNanoCoins(0, 0), tx2.getValueSentFromMe(wallet));
+        // check fee
+        assertEquals(Utils.toNanoCoins(0, 1), tx2.getFee(wallet));
     }
 
     @Test
