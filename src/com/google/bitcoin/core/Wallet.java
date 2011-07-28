@@ -137,11 +137,11 @@ public class Wallet implements Serializable {
     public Wallet(NetworkParameters params) {
         this.params = params;
         keychain = new ArrayList<ECKey>();
-        unspent = new HashMap<Sha256Hash, Transaction>();
-        spent = new HashMap<Sha256Hash, Transaction>();
-        inactive = new HashMap<Sha256Hash, Transaction>();
-        pending = new HashMap<Sha256Hash, Transaction>();
-        dead = new HashMap<Sha256Hash, Transaction>();
+        unspent = new LinkedHashMap<Sha256Hash, Transaction>();
+        spent = new LinkedHashMap<Sha256Hash, Transaction>();
+        inactive = new LinkedHashMap<Sha256Hash, Transaction>();
+        pending = new LinkedHashMap<Sha256Hash, Transaction>();
+        dead = new LinkedHashMap<Sha256Hash, Transaction>();
         eventListeners = new ArrayList<WalletEventListener>();
     }
 
@@ -429,8 +429,14 @@ public class Wallet implements Serializable {
         // For now let's just pick the first key in our keychain. In future we might want to do something else to
         // give the user better privacy here, eg in incognito mode.
         assert keychain.size() > 0 : "Can't send value without an address to use for receiving change";
+        
+        return createSend(address, nanocoins, getChangeAddress());
+    }
+    
+    Address getChangeAddress()
+    {
         ECKey first = keychain.get(0);
-        return createSend(address, nanocoins, first.toAddress(params));
+        return first.toAddress(params);
     }
 
     /**
@@ -906,5 +912,37 @@ public class Wallet implements Serializable {
      */
     public Collection<Transaction> getPendingTransactions() {
         return Collections.unmodifiableCollection(pending.values());
+    }
+    
+    // WIP Transaction fee stuff
+    
+    /**
+     * Better keep this package private since TransactionOutputs aren't immutable. Don't mess with them.
+     * @return Collection of our spendable outputs.
+     */
+    Collection<TransactionOutput> getAvailableOutputs()
+    {
+        LinkedList<TransactionOutput> outputs = new LinkedList<TransactionOutput>();
+        
+        for (Transaction tx : unspent.values()) {
+            for (TransactionOutput output : tx.outputs) {
+                if (!output.isAvailableForSpending()) continue;
+                if (!output.isMine(this)) continue;
+                outputs.add(output);
+            }
+        }
+        
+        return outputs;
+    }
+    
+    public PreparedSpend prepareSpend(Spend spend)
+    {
+        //XXX: we're not keeping track of the unspent pool's state yet
+        return spend.prepare(this);
+    }
+    
+    public boolean spend(PreparedSpend spend)
+    {
+        throw new IllegalStateException("Not implemented yet.");
     }
 }
