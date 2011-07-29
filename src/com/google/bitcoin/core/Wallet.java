@@ -94,6 +94,7 @@ public class Wallet implements Serializable {
      * make people wait but it would be a good improvement to resolve this in future.
      */
     final Map<Sha256Hash, Transaction> unspent;
+    long timestamp = System.nanoTime();
 
     /**
      * Map of txhash->Transactions where the Transactions outputs are all fully spent. They are kept separately so
@@ -258,6 +259,7 @@ public class Wallet implements Serializable {
                     log.info("  ->unspent");
                     boolean alreadyPresent = unspent.put(wtx.getHash(), wtx) != null;
                     assert !alreadyPresent : "TX in both pending and unspent pools";
+                    updateTimestamp();
                 }
             } else if (sideChain) {
                 // The transaction was accepted on an inactive side chain, but not yet by the best chain.
@@ -307,7 +309,7 @@ public class Wallet implements Serializable {
      * Handle when a transaction becomes newly active on the best chain, either due to receiving a new block or a
      * re-org making inactive transactions active.
      */
-    private void processTxFromBestChain(Transaction tx) throws VerificationException {
+    private synchronized void processTxFromBestChain(Transaction tx) throws VerificationException {
         // This TX may spend our existing outputs even though it was not pending. This can happen in unit
         // tests and if keys are moved between wallets.
         updateForSpends(tx);
@@ -316,6 +318,7 @@ public class Wallet implements Serializable {
             log.info("  new tx ->unspent");
             boolean alreadyPresent = unspent.put(tx.getHash(), tx) != null;
             assert !alreadyPresent : "TX was received twice";
+            updateTimestamp();
         } else {
             // It spent some of our coins and did not send us any.
             log.info("  new tx ->spent");
@@ -329,7 +332,7 @@ public class Wallet implements Serializable {
      * when we receive our own spends, we've already marked the outputs as spent previously (during tx creation) so
      * there's no need to go through and do it again.
      */
-    private void updateForSpends(Transaction tx) throws VerificationException {
+    private synchronized void updateForSpends(Transaction tx) throws VerificationException {
         for (TransactionInput input : tx.inputs) {
             TransactionInput.ConnectionResult result = input.connect(unspent, false);
             if (result == TransactionInput.ConnectionResult.NO_SUCH_TX) {
@@ -376,6 +379,7 @@ public class Wallet implements Serializable {
                         log.info("  prevtx <-unspent");
                         log.info("  prevtx ->spent");
                         spent.put(connected.getHash(), connected);
+                        updateTimestamp();
                     }
                 }
             }
@@ -857,6 +861,8 @@ public class Wallet implements Serializable {
                 l.onReorganize();
             }
         }
+        
+        updateTimestamp();
     }
 
     private void reprocessTxAfterReorg(Map<Sha256Hash, Transaction> pool, Transaction tx) {
@@ -917,10 +923,11 @@ public class Wallet implements Serializable {
     // WIP Transaction fee stuff
     
     /**
+     * //XXX: wrap these instead of leaking them
      * Better keep this package private since TransactionOutputs aren't immutable. Don't mess with them.
      * @return Collection of our spendable outputs.
      */
-    Collection<TransactionOutput> getAvailableOutputs()
+    synchronized Collection<TransactionOutput> getAvailableOutputs()
     {
         LinkedList<TransactionOutput> outputs = new LinkedList<TransactionOutput>();
         
@@ -935,14 +942,21 @@ public class Wallet implements Serializable {
         return outputs;
     }
     
-    public PreparedSpend prepareSpend(Spend spend)
+    private synchronized void updateTimestamp()
     {
-        //XXX: we're not keeping track of the unspent pool's state yet
-        return spend.prepare(this);
+        timestamp = System.nanoTime();
     }
     
-    public boolean spend(PreparedSpend spend)
+    public synchronized PreparedSpend prepareSpend(Spend spend)
     {
+        return spend.prepare(this, timestamp);
+    }
+    
+    public synchronized boolean spend(PreparedSpend spend)
+    {
+        if (spend.getTimestamp() != timestamp)
+            return false;
+        
         throw new IllegalStateException("Not implemented yet.");
     }
 }

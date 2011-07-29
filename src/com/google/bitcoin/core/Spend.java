@@ -18,11 +18,10 @@ public class Spend
 {
     private static final Logger log = LoggerFactory.getLogger(Spend.class);
     
-    private LinkedHashMap<Address, BigInteger> spends;
+    private LinkedHashMap<Address, BigInteger> spends = new LinkedHashMap<Address, BigInteger>();
     
     private Spend()
     {
-        spends = new LinkedHashMap<Address, BigInteger>();
     }
     
     public static Spend create(final Address address, final BigInteger nanocoins)
@@ -49,7 +48,7 @@ public class Spend
     /**
      * Subclasses can override this method to change the coin selection algorithm and fee rules
      */
-    PreparedSpend prepare(final Wallet wallet)
+    PreparedSpend prepare(final Wallet wallet, long timestamp)
     {
         // sort coins into ascending order to combat wallet fragmentation and reduce fees
         final SortedSet<TransactionOutput> unspent = new TreeSet<TransactionOutput>(
@@ -101,6 +100,6 @@ public class Spend
             spends.put(wallet.getChangeAddress(), change);
         }
 
-        return new PreparedSpend(spends, inputs, fee);
+        return new PreparedSpend(timestamp, spends, inputs, fee);
     }
 }
