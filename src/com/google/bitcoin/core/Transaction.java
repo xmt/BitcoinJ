@@ -137,16 +137,11 @@ public class Transaction extends Message implements Serializable {
         
         for (final TransactionInput input : inputs)
         {
-            //XXX: no easy way to get value of input!
-            TransactionOutput connected = input.getConnectedOutput(wallet.unspent);
-            if (connected == null)
-                connected = input.getConnectedOutput(wallet.spent);
-            if (connected == null)
-                connected = input.getConnectedOutput(wallet.pending);
+            TransactionOutput connected = findConnectedOutput(input, wallet);
             if (connected == null)
             {
                 //XXX: what to do?
-                return BigInteger.ZERO;
+                throw new IllegalStateException("Missing transaction!");
             }
             
             in = in.add(connected.getValue());
@@ -179,6 +174,20 @@ public class Transaction extends Message implements Serializable {
         }
         appearsIn.add(block);
     }
+    
+    /**
+     * Find the TransactionOutput that this input is drawing from.
+     * @return null if the output is not found in wallet.
+     */
+    private TransactionOutput findConnectedOutput(final TransactionInput input, final Wallet wallet)
+    {
+        TransactionOutput connected = input.getConnectedOutput(wallet.unspent);
+        if (connected == null)
+            connected = input.getConnectedOutput(wallet.spent);
+        if (connected == null)
+            connected = input.getConnectedOutput(wallet.pending);
+        return connected;
+    }
 
     /**
      * Calculates the sum of the inputs that are spending coins with keys in the wallet. This requires the
@@ -193,11 +202,7 @@ public class Transaction extends Message implements Serializable {
         for (TransactionInput input : inputs) {
             // This input is taking value from an transaction in our wallet. To discover the value,
             // we must find the connected transaction.
-            TransactionOutput connected = input.getConnectedOutput(wallet.unspent);
-            if (connected == null)
-                connected = input.getConnectedOutput(wallet.spent);
-            if (connected == null)
-                connected = input.getConnectedOutput(wallet.pending);
+            TransactionOutput connected = findConnectedOutput(input, wallet);
             if (connected == null)
                 continue;
             // The connected output may be the change to the sender of a previous input sent to this wallet. In this
